@@ -113,3 +113,15 @@ body {
   font-weight: bold;
   display: none;
 }
+
+/********Table********/
+#result-table td.td-negative{
+  color: red;
+}
+#result-table td.td-positive{
+  color: green;
+}
+
+#result-table td{
+  min-width: 80px
+}

@@ -12,29 +12,17 @@ import re
 import jieba
 import random
 import os
+from model.Bert import Bert
+from config import *
 
-dirname = os.path.dirname(__file__)
-
-# cws_model = os.path.join(dirname,"../data/ltp_data_v3.4.0/cws.model")
-# pos_model = os.path.join(dirname,"../data/ltp_data_v3.4.0/pos.model")
-# par_model = os.path.join(dirname,"../data/ltp_data_v3.4.0/parser.model")
-# ner_model = os.path.join(dirname,"../data/ltp_data_v3.4.0/ner.model")
-
-cws_model = "/home/kg/PycharmProjects/TextGrapher-master/ltp_data/ltp_data_v3.4.0/cws.model"
-pos_model = "/home/kg/PycharmProjects/TextGrapher-master/ltp_data/ltp_data_v3.4.0/pos.model"
-par_model = "/home/kg/PycharmProjects/TextGrapher-master/ltp_data/ltp_data_v3.4.0/parser.model"
-ner_model = "/home/kg/PycharmProjects/TextGrapher-master/ltp_data/ltp_data_v3.4.0/ner.model"
-
-
-
-def cut(string):
-    return ' '.join(token for token in jieba.cut(''.join(re.sub('\\\\n|[\n\u3000\r]', '', string)))
-                    if token not in stopwords)
+# def cut(string):
+#     return ' '.join(token for token in jieba.cut(''.join(re.sub('\\\\n|[\n\u3000\r]', '', string)))
+#                     if token not in stopwords)
 
 
 class SpeakDetect:
     def __init__(self):
-        pass
+        self.bert = Bert() # 用于情感分析
 
     def get_word_list(self, sentence, model):
         # 得到分词
@@ -71,16 +59,16 @@ class SpeakDetect:
         return list(netags)
 
     def news_parser(self, news):
-        word_list = self.get_word_list(news, cws_model)
-        postag_list = self.get_postag_list(word_list, pos_model)
-        parser_list = self.get_parser_list(word_list, postag_list, par_model)
+        word_list = self.get_word_list(news, LTP_CWS_MODEL)
+        postag_list = self.get_postag_list(word_list, LTP_POS_MODEL)
+        parser_list = self.get_parser_list(word_list, postag_list, LTP_PAR_MODEL)
         for i in range(len(word_list)):
             print(i + 1, word_list[i], parser_list[i])
 
     def get_news_parser(self, news):
-        word_list =   self.get_word_list(news, cws_model)
-        postag_list = self.get_postag_list(word_list, pos_model)
-        parser_list = self.get_parser_list(word_list, postag_list, par_model)
+        word_list =   self.get_word_list(news, LTP_CWS_MODEL)
+        postag_list = self.get_postag_list(word_list, LTP_POS_MODEL)
+        parser_list = self.get_parser_list(word_list, postag_list, LTP_PAR_MODEL)
         return [(word_list[i], parser_list[i]) for i in range(len(word_list))]
 
     def get_speak(self, word_parser_list):
@@ -151,23 +139,6 @@ class SpeakDetect:
 
         return speak_sentence, speak_words, content_before, content_after
 
-    # def get_speak_content_(self, news):
-    #     word_parser_list = self.get_news_parser(news)
-    #     speak_indexes = self.get_speak(word_parser_list)
-    #     print(speak_indexes)
-    #     if not speak_indexes:
-    #         print('没有人说话！')
-    #     for speak_index in speak_indexes:
-    #         speak_sentence, content_before, content_after = self.get_speak_sentence(word_parser_list, speak_index)
-    #         print('speak_sentence:')
-    #         print(speak_sentence)
-    #         if content_before:
-    #             print('content_before:')
-    #             print(content_before)
-    #         if content_after:
-    #             print('content_after:')
-    #             print(content_after)
-    #         print()
 
     def get_speak_content(self, news):
         news = re.sub('\\\\n|[\n\u3000\r]', '', news)
@@ -175,46 +146,57 @@ class SpeakDetect:
         speak_indexes = self.get_speak(word_parser_list)
         result = []
         for speak_index in speak_indexes:
-            result_item = {"speaker":"", "content":""}
+            result_item = {"speaker":"", "content":"", "sentiment":0}
             speak_sentence, speak_words, content_before, content_after = self.get_speak_sentence(word_parser_list, speak_index)
-            print('speak_sentence:')
-            print(speak_sentence)
-            # 找人名
-            postag_list = self.get_postag_list(speak_words, pos_model)
-            ner_list = self.get_ner(speak_words, postag_list, ner_model)
+
+            # 找包含“说”句子里面的人名
+            print(speak_words)
+            postag_list = self.get_postag_list(speak_words, LTP_POS_MODEL)
+            ner_list = self.get_ner(speak_words, postag_list, LTP_NER_MODEL)
             person_name_id = [idx for idx, ner in enumerate(ner_list) if ner=='S-Nh']
+
+            # 若没有找到人名，认为不是我们要找的句子，跳过
             if len(person_name_id) == 0:
                 continue
+
+            # 提取人名
             person_name = speak_words[person_name_id[0]:person_name_id[-1]+1] # 可能出现“x和y说.."，取最大范围
             person_name = "".join(person_name)
             result_item["speaker"] = person_name
 
+            # 组合所说的话（前后的语句合并）
+            speak_content = ""
             if content_before:
-                print('content_before:')
-                print(content_before)
-                result_item["content"] += content_before
+                # print('content_before:')
+                # print(content_before)
+                speak_content += content_before
             if content_after:
-                print('content_after:')
-                print(content_after)
-                result_item["content"] += " " + content_after
+                # print('content_after:')
+                # print(content_after)
+                speak_content += " " + content_after
+            result_item["content"] = speak_content
+
+            # 情感分析
+            sentiment = self.bert.predict(speak_content)
+            result_item["sentiment"] = sentiment
+
+            # 添加到结果列表
             result.append(result_item)
 
-        print(result)
         return result
 
 
 if __name__ == '__main__':
-    path = os.path.join(dirname, '../data/sqlResult_1558435.csv')
-    news = pd.read_csv(path, encoding='gb18030')
-    news = news.fillna('')
-    content = news['content'].tolist()
-    # 读取中文停用词
-    with open(os.path.join(dirname, '../data/stop_word.txt'), 'r', encoding='utf8') as f:
-        stopwords = [w.strip() for w in f.readlines()]
-
-    sample_content = random.sample(content, 100)
-    test_news = random.choice(sample_content)
-
+    # path = os.path.join(dirname, '../data/sqlResult_1558435.csv')
+    # news = pd.read_csv(path, encoding='gb18030')
+    # news = news.fillna('')
+    # content = news['content'].tolist()
+    # # 读取中文停用词
+    # with open(os.path.join(dirname, '../data/stop_word.txt'), 'r', encoding='utf8') as f:
+    #     stopwords = [w.strip() for w in f.readlines()]
+    #
+    # sample_content = random.sample(content, 100)
+    # test_news = random.choice(sample_content)
 
     test_news = '''2月29日，在美国华盛顿，美国副总统彭斯参加白宫记者会。新华社记者 刘杰 摄
 

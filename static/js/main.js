@@ -10,6 +10,8 @@ $("#start-button").click(()=>{
         return
     }
     popup.text("").hide();
+    $("#start-button").attr('disabled','disabled');
+    $("#button-spin").show();
 
     // http 请求
     $.ajax({
@@ -24,6 +26,8 @@ $("#start-button").click(()=>{
             }else {
                 alert("服务器错误");
             }
+            $("#start-button").removeAttr('disabled');
+            $("#button-spin").hide();
         }
     });
 
@@ -38,11 +42,15 @@ function renderOutput(result){
     }
     for (let line of result.detail){
         cnt += 1;
-        let tableLine = `<tr>
-                            <td>${cnt}</td>
-                            <td>${line.speaker}</td>
-                            <td>${line.content}</td>
-                        </tr>`;
+        let tableLine =
+            `<tr>
+                <td>${cnt}</td>
+                <td>${line.speaker}</td>
+                <td>${line.content}</td>
+                <td class="${line.sentiment === 0 ? 'td-negative' : 'td-positive'}">
+                    ${line.sentiment === 0 ? '负面' : '正面'}
+                </td>
+            </tr>`;
         $("#result-table tbody").append($(tableLine))
     }
 }
