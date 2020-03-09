@@ -181,6 +181,7 @@ if __name__ == "__main__":
         print("valid loss: ", valid_loss, "\t", "valid acc:", valid_acc)
 
     torch.save(model.state_dict(), '../save/bert_cla.ckpt')
+    
     print('保存训练完成的model...')
 
     # 测试
