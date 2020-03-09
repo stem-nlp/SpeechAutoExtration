@@ -127,7 +127,7 @@ class SpeakDetect:
         # 位于"说"所在句子之后的内容
         content_after = ''
         content_after_start = speak_end + 1
-        if word_parser_list[speak_end][0] != '。':  # 如果句子以句号结尾，那么说明后面不是说的内容
+        if word_parser_list[speak_end][0] != '。' and content_after_start < len(word_parser_list):  # 如果句子以句号结尾，那么说明后面不是说的内容
             if word_parser_list[content_after_start][0] == '“':
                 end_wp = '”'
             else:
