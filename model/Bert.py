@@ -15,13 +15,19 @@ class Bert:
         # Bert模型以及相关配置
         # self.device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
         self.device = torch.device('cpu')
-        config = BertConfig.from_pretrained('bert-base-chinese',
-                                            num_labels=num_labels,
-                                            hidden_dropout_prob=hidden_dropout_prob)
+        # config = BertConfig.from_pretrained('bert-base-chinese',
+        #                                     num_labels=num_labels,
+        #                                     hidden_dropout_prob=hidden_dropout_prob)
+        #
+        # self.tokenizer = BertTokenizer.from_pretrained('bert-base-chinese')
+        # self.model = BertForSequenceClassification.from_pretrained('bert-base-chinese', config=config)
+
         self.tokenizer = BertTokenizer.from_pretrained('bert-base-chinese')
-        self.model = BertForSequenceClassification.from_pretrained('bert-base-chinese', config=config)
+        self.model = BertForSequenceClassification.from_pretrained(BERT_MODEL_PATH)
         self.model.to(self.device)
-        self.model.load_state_dict(torch.load(BERT_MODEL_PATH))
+
+        # self.model.load_state_dict(torch.load(BERT_MODEL_PATH))
+        # self.model.save_pretrained(os.path.dirname(BERT_MODEL_PATH))
 
     def convert_text_to_ids(self, tokenizer, text, max_len=100):
         if isinstance(text, str):
