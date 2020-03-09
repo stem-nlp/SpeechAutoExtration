@@ -1,5 +1,4 @@
-function fillOutput(result){
-}
+let data_global = [];
 
 $("#start-button").click(()=>{
     let body = $("#input-body").val();
@@ -39,6 +38,7 @@ function renderOutput(result){
     $("#result-table tbody").empty();
     if(result.detail.length === 0){
         alert("无结果");
+        return;
     }
     for (let line of result.detail){
         cnt += 1;
@@ -53,4 +53,113 @@ function renderOutput(result){
             </tr>`;
         $("#result-table tbody").append($(tableLine))
     }
+    data_global = result.detail;
 }
+
+
+let btnList = document.querySelector(".btn-list");
+let btnChart = document.querySelector(".btn-chart");
+let newsList = document.querySelector(".news-list");
+let newCharts = document.querySelector("#news-charts");
+
+btnList.addEventListener("click", ()=>{
+
+    newsList.style.display = "block";
+    btnList.classList.add("active");
+    newCharts.style.display="none";
+    btnChart.classList.remove("active");
+});
+
+
+// 图表按钮 -- 点击事件
+btnChart.addEventListener("click", ()=>{
+
+    newsList.style.display = "none";     // 列表视图隐藏
+    newCharts.style.display = "block";   // 图表视图显示
+    btnList.classList.remove("active");
+    btnChart.classList.add("active");
+    draw_echart(data_global);
+});
+
+
+function draw_echart(data) {
+    let myChart = echarts.init(newCharts);    // 初始化echarts, 挂载至容器中
+
+    // 饼状图参数
+    myChart.setOption({
+        title: {
+            text: "新闻评论数据展示",
+            left: "center"
+        },
+        tooltip: {
+            trigger: 'item',
+            formatter: '{a}'
+        },
+        legend: {
+            orient: 'vertical',
+            left: 'left',
+            data: []
+        },
+        series: [
+            {
+                name: '言论',
+                type: 'pie',
+                radius: '60%',
+                top: '-50',
+                center: ['50%', '60%'],
+                label: {
+                    formatter: '{b}({d}%)'
+                },
+                data: [],
+                emphasis: {
+                    itemStyle: {
+                        shadowBlur: 10,
+                        shadowOffsetX: 0,
+                        shadowColor: 'rgba(0, 0, 0, 0.5)'
+                    }
+                }
+            }
+        ]
+    });
+
+    // 根据数据渲染饼状图
+    let names = [];
+    let brower = [];
+
+    // 获取原数据中属性及属性值
+    data.forEach(item=>{
+        names.push(item.speaker);
+        brower.push({
+            name: item.speaker,
+            value: 200
+        });
+    });
+
+    // 更改饼状图参数
+    myChart.setOption({
+        legend: {
+            data: names
+        },
+        series: [{
+            data: brower
+        }]
+    });
+
+    // 重新获取鼠标滑过事件，浮动框渲染属性值
+    myChart.on("mouseover",function(params){
+        data.map((item,index)=>{
+            if(params.dataIndex==index){
+                params.seriesName = item.content;
+                return params.seriesName;
+            }
+        });
+
+        myChart.setOption({
+            series:[{
+                name: params.seriesName
+            }]
+        });
+    });
+
+}
+

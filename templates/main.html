@@ -74,12 +74,12 @@
                 <h1 class="h2">新闻人物言论自动提取</h1>
             </div>
             <h4>新闻正文</h4>
-<!--            <div class="form-group">-->
-<!--                <label for="input-title">新闻标题</label>-->
-<!--                <input type="email" class="form-control" id="input-title" placeholder="输入待分析的新闻标题">-->
-<!--            </div>-->
+            <!--            <div class="form-group">-->
+            <!--                <label for="input-title">新闻标题</label>-->
+            <!--                <input type="email" class="form-control" id="input-title" placeholder="输入待分析的新闻标题">-->
+            <!--            </div>-->
             <div class="form-group">
-<!--                <label for="input-body">新闻正文</label>-->
+                <!--                <label for="input-body">新闻正文</label>-->
                 <textarea class="form-control" id="input-body" rows="15" placeholder="输入待分析的新闻正文"></textarea>
             </div>
 
@@ -91,28 +91,39 @@
             <span id="popup"></span>
 
             <hr>
-<!--            <h4>模型输出</h4>-->
-<!--            <div class="form-group">-->
-<!--                <label for="output">正文自动摘要后生成的内容</label>-->
-<!--                <textarea class="form-control" id="output" rows="10"></textarea>-->
-<!--            </div>-->
-<!--            <hr>-->
+            <!--            <h4>模型输出</h4>-->
+            <!--            <div class="form-group">-->
+            <!--                <label for="output">正文自动摘要后生成的内容</label>-->
+            <!--                <textarea class="form-control" id="output" rows="10"></textarea>-->
+            <!--            </div>-->
+            <!--            <hr>-->
             <h4>结果</h4>
-            <div class="table-responsive">
-                <table class="table table-striped table-sm" id="result-table">
-                    <thead>
-                    <tr>
-                        <th>#</th>
-                        <th>人物</th>
-                        <th>言论</th>
-                        <th>情感</th>
-                    </tr>
-                    </thead>
-                    <tbody>
-
-                    </tbody>
-                </table>
+            <div class="d-flex news-btn-group">
+                <button type="button" class="btn btn-outline-success btn-custom btn-list btn-sm active">解析列表</button>
+                <button type="button" class="btn btn-outline-success btn-custom btn-chart btn-sm">解析图表</button>
             </div>
+
+            <div class="tab-show">
+                <div class="news-list">
+                    <div class="table-responsive">
+                        <table class="table table-striped table-sm" id="result-table">
+                            <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>人物</th>
+                                <th>言论</th>
+                                <th>情感</th>
+                            </tr>
+                            </thead>
+                            <tbody>
+
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div id="news-charts"></div>
+            </div>
+
         </main>
     </div>
 </div>
@@ -120,6 +131,7 @@
         crossorigin="anonymous"></script>
 <script src="../static/bootstrap-4.3.1/js/bootstrap.bundle.min.js"
         crossorigin="anonymous"></script>
+<script src="../static/js/echarts.js"></script>
 <script src="../static/js/main.js"></script>
 </body>
 </html>
