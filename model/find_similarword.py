@@ -4,30 +4,45 @@ Created on Sat Mar  7 20:37:08 2020
 
 @author: zwconnie
 """
+
+from pyltp import Segmentor
 from collections import defaultdict
 from pyltp import  SentenceSplitter,NamedEntityRecognizer,Postagger,Parser,Segmentor
+import numpy as np
+import pandas as pd
 import re
 from model.Bert import Bert
 from config import *
 
 #需更改路径
-sayverb_file=open(SAY_WORDS_FILE)
-
+cws_model = LTP_CWS_MODEL
+pos_model = LTP_POS_MODEL
+par_model = LTP_PAR_MODEL
+ner_model = LTP_NER_MODEL
+'''
+sayverb_file=open('listsayverb.txt‘)
 speak_words=[]
 for line in sayverb_file.readlines():
     if len(line.split())>0:
         if line.split()[0] not in speak_words:
             speak_words.append(line.split()[0])
 sayverb_file.close()
+'''
+
+speak_words= ['表示', '说','回复', '指出', '认为', '坦言', '告诉', '强调', '称', '直言', '普遍认为', '介绍', '透露', '重申', '呼吁', '说道', '感叹', '地说', '写道',
+         '中称', '证实', '还称', '猜测', '暗示', '感慨', '热议', '敦促', '指责', '声称', '主张', '反对', '批评', '表态', '中说', '承认', '却说', '感触',
+         '提到', '所说', '引述', '质疑', '抨击','回应', '分析说','发现','表示','表态']
 
 class SpeakDetect:
     def __init__(self):
         self.bert = Bert() # 用于情感分析
+        
 
     def get_word_list(self, sentence, model):
         # 得到分词
         segmentor = Segmentor()
         segmentor.load(model)
+        sentence=''.join(re.sub('\\\\n|[\n\r]', '', sentence))
         word_list = list(segmentor.segment(sentence))
         segmentor.release()
         self.word_list=word_list
@@ -57,10 +72,11 @@ class SpeakDetect:
         self.ner_list=list(netags)
 
     def get_news_parser(self, news):
-        self.get_word_list(news, LTP_CWS_MODEL)
-        self.get_postag_list(self.word_list, LTP_POS_MODEL)
-        self.get_parser_list(self.word_list, self.postag_list, LTP_PAR_MODEL)
-        self.get_ner(self.word_list,self.postag_list, LTP_NER_MODEL)
+        self.news=news
+        self.get_word_list(news, cws_model)
+        self.get_postag_list(self.word_list, pos_model)
+        self.get_parser_list(self.word_list, self.postag_list, par_model)
+        self.get_ner(self.word_list,self.postag_list,ner_model)
         word_rel_list=[[i+1,self.word_list[i],self.parser_list[i],self.ner_list[i]] for i in range(len(self.word_list))]
         #若有+名词且依存关系为兼词，删除“有”不影响句意，且能识别正确的动宾关系(例如：有政府官员称，政府官员和称之间的动宾关系未能识别)，删除后重新获取词性标注、依存关系
         for item in word_rel_list:
@@ -69,9 +85,9 @@ class SpeakDetect:
                 if len(adj_list)>0:
                     self.word_list.remove(item[1])
         if len(self.word_list)<len(self.postag_list):
-            self.get_postag_list(self.word_list,LTP_POS_MODEL)
-            self.get_parser_list(self.word_list, self.postag_list, LTP_PAR_MODEL)
-            self.get_ner(self.word_list,self.postag_list,LTP_NER_MODEL)
+            self.get_postag_list(self.word_list,pos_model)
+            self.get_parser_list(self.word_list, self.postag_list, par_model)
+            self.get_ner(self.word_list,self.postag_list,ner_model)
             word_rel_list=[[i+1,self.word_list[i],self.parser_list[i],self.ner_list[i]] for i in range(len(self.word_list))]
         #合并专有名词B-N,I-N,E-N为同一个词，已有的模型获得列表同时删除对应位置的元素，均用专有名词最后一个词代表整个专有名词
         remove_element=[]
@@ -107,8 +123,9 @@ class SpeakDetect:
             self.get_path(word_rel_list,path_list)
         return path_list
     
-    #获得主语的修饰词，规则：与核心词间关系为SBV的词作为主语词基(已经过NER合并专有名词)，寻找所有与该词基有ATT依存关系的词，按词序排列
+    #获得主语的修饰词，规则：与核心词间关系为SBV的词作为主语词基(已经过NER合并专有名词)，寻找所有与该词基有ATT依存关系的词，按词序排列,但最多只取3个修饰词
     def get_ATT(self,word_rel_list,path_list):
+        center=path_list[-1][0]
         path_end=0
         for item in word_rel_list:
             if (item[2][0]==path_list[-1][0]) & (item[2][1]=='ATT'):
@@ -118,7 +135,21 @@ class SpeakDetect:
         if path_end==1:
             self.get_ATT(word_rel_list,path_list)
         sorted_list=sorted(path_list,key=lambda x:x[0])
-        ATT_subject= ''.join([sub[1] for sub in sorted_list])
+        nearest_id=0
+        for item in word_rel_list:
+            if item[0]<center:
+                nearest_id=item[0]
+            else:
+                break
+        if nearest_id>sorted_list[-1][0]:
+            ATT_subject=''
+        else:
+            dict_wordpos=defaultdict(str)
+            for i in range(len(self.word_list)):
+                dict_wordpos[self.word_list[i]]=self.postag_list[i]
+            ATT_list=[sub[1] for sub in sorted_list if dict_wordpos[sub[1]] !='v']
+            
+            ATT_subject= ''.join(ATT_list)
         return ATT_subject
     
     #获得内容：所有依存路径中包含该动词的词按顺序排列
@@ -129,8 +160,15 @@ class SpeakDetect:
             if content_code in item_path:
                 content_list.append((item[0],item[1]))
         sorted_list=sorted(content_list,key=lambda x:x[0])
-        content=''.join([sub[1] for sub in sorted_list])
-        return content
+        start_num=sorted_list[0][0]
+        end_num=sorted_list[-1][0]
+        content_list=[word[1] for word in word_rel_list if ((word[0]>=start_num) & (word[0]<=end_num+1))]
+        for i in range(len(content_list)):
+            if content_list[i] in ['。','！','？']:
+                content_list=content_list[:i]
+                break
+        content=''.join(content_list)
+        return content,(start_num,end_num)
               
     def get_speak(self, word_rel_list):
         subject_code=[]
@@ -142,20 +180,23 @@ class SpeakDetect:
         for item in word_rel_list:
             item.append(self.get_path(word_rel_list,[(item[0],item[2][0],item[2][1])]))
         for item in word_rel_list:
+            recorded=[]
             if (item[1] in speak_words) & (item[2][0]==0):
                 speak_code.append(item[1])
                 speak_num=len(speak_code)
                 for subitem in word_rel_list:
                     if (subitem[2][0]==item[0]) & (subitem[2][1]=='SBV'):
-                        if len(subject_code)<=speak_num:
+                        if len(subject_code)<speak_num:
                             subject_code.append([self.get_ATT(word_rel_list,[(subitem[0],subitem[1])])])
                         else:
-                            subject_code[speak_num].append(self.get_ATT(word_rel_list,[(subitem[0],subitem[1])]))
+                            subject_code[speak_num-1].append(self.get_ATT(word_rel_list,[(subitem[0],subitem[1])]))
                     if (subitem[2][0]==item[0]) & (subitem[2][1] in ['VOB','FOB']):
-                        if len(speak_content)<=speak_num:
-                            speak_content.append([self.get_content(word_rel_list,subitem[0],(subitem[0],subitem[1]))])
+                        content, position=self.get_content(word_rel_list,subitem[0],(subitem[0],subitem[1]))
+                        if len(speak_content)<speak_num:
+                            speak_content.append([content])
                         else:
-                            speak_content[speak_num].append(self.get_content(word_rel_list,subitem[0],(subitem[0],subitem[1])))
+                            speak_content[speak_num-1].append(content)
+                        recorded.append(position)
                 #未能找到核心动词对应的名词和内容时，用空列表填充
                 if len(subject_code)<speak_num:
                     subject_code.append([])
@@ -167,9 +208,9 @@ class SpeakDetect:
         for i in range(len(self.word_list)):
             if self.word_list[i] not in wordtag_dict.keys():
                 wordtag_dict[self.word_list[i]]=self.postag_list[i]
-        #若名词为空，或为代词，替换为前面最临近的名词
+        #若名词为代词，替换为前面最临近的名词,为空则保留为空
         for i in range(1,len(subject_code)):
-            if (wordtag_dict[subject_code[i]] =='r') | (subject_code[i]==''):
+            if (wordtag_dict[subject_code[i]] =='r'):
                 for j in range(i-1,-1,-1):
                     if (subject_code[j]!='') & (wordtag_dict[subject_code[j]] !='r'):
                         subject_code[i]=subject_code[j]
@@ -181,35 +222,26 @@ class SpeakDetect:
             if (len(sum_list[i][0])==0) | (len(sum_list[i][2])==0):
                 remove_sumlist.append(i)
         sum_list=[sum_list[i] for i in range(len(sum_list)) if i not in remove_sumlist]
-        return sum_list
+        self.df_result=pd.DataFrame(sum_list,columns=['person','verb','content'])
 
-    def get_speak_content(self, news):
-        news = re.sub('\\\\n|[\n\u3000\r]', '', news)
-        parser = self.get_news_parser(news)
-        speak_indexes = self.get_speak(parser)
-        result = []
-        for speak_index in speak_indexes:
-            result_item = {"speaker": "", "content": "", "sentiment": 0}
-            speaker, speak_words, content= speak_index
-
-            result_item["speaker"] = speaker
-            result_item["content"] = content
-
-            # 情感分析
-            sentiment = self.bert.predict(content)
-            result_item["sentiment"] = sentiment
-
-            # 添加到结果列表
+    def get_sentiment(self,news):
+        s.get_speak(s.get_news_parser(news))
+        result=[]
+        self.df_result['sentiment']='-'
+        # 情感分析
+        for i in range(len(self.result_item.person)):
+            sentiment = self.bert.predict(self.df_result.loc[i,'content'])
+            self.df_result.loc[i,"sentiment"] = sentiment
+            result_item={"speaker":self.df_result.loc[i,'person'], "content":self.df_result.loc[i,'content'], "sentiment":self.df_result.loc[i,'sentiment']}
             result.append(result_item)
+        # 添加到结果列表
         print(result)
         return result
 
-if __name__ == '__main__':
-    s=SpeakDetect()
-    # test_news='''2月29日，在美国华盛顿，美国副总统彭斯参加白宫记者会。新华社记者 刘杰 摄 2日，彭斯与卫生部门官员共同就新冠病毒肺炎召开记者会，有政府官员称，美国新增4个新冠病毒肺炎死亡病例，死亡总数为6人。“尽管今天有这个坏消息，但是我们仍要说清楚，据所有与我们政府部门合作的专家，美国人感染新型冠状病毒的几率仍然很低“，
-    # 彭斯说。他还提到，国内病例中有29例来自加利福尼亚州或华盛顿特区。卫生官员称，43个确诊患者中，有17个病例是在旅行中感染新冠病毒，26人是通过人与人的传播感染。目前，彭斯负责领导特朗普政府对新冠病毒疫情的应对工作，他已经选择德博拉·伯克斯协助自己应对此次疫情危机。不过美国《纽约时报》援引美国卫生部门官员表态称，截至当地时间2日晚，
-    # 美国境内新冠病毒感染病例数已达100例，其中包括6例死亡病例（全部发生在美国西北部华盛顿州）。'''
-    test_news = '''
+
+s=SpeakDetect()
+#test_news='''2月29日，在美国华盛顿，美国副总统彭斯参加白宫记者会。新华社记者 刘杰 摄 2日，彭斯与卫生部门官员共同就新冠病毒肺炎召开记者会，有政府官员称，美国新增4个新冠病毒肺炎死亡病例，死亡总数为6人。“尽管今天有这个坏消息，但是我们仍要说清楚，据所有与我们政府部门合作的专家，美国人感染新型冠状病毒的几率仍然很低“，彭斯说。他还提到，国内病例中有29例来自加利福尼亚州或华盛顿特区。卫生官员称，43个确诊患者中，有17个病例是在旅行中感染新冠病毒，26人是通过人与人的传播感染。目前，彭斯负责领导特朗普政府对新冠病毒疫情的应对工作，他已经选择德博拉·伯克斯协助自己应对此次疫情危机。不过美国《纽约时报》援引美国卫生部门官员表态称，截至当地时间2日晚，美国境内新冠病毒感染病例数已达100例，其中包括6例死亡病例（全部发生在美国西北部华盛顿州）。'''   
+test_news=test_news = '''
     新冠肺炎疫情发生以来，新冠病毒的起源、传播及演变备受关注。多位国内外专家表示，根据目前已有证据还无法确认新冠病毒起源于哪里。
 传播“拼图”有缺失
 新冠病毒在人类中的传播是如何开始的？从最初报告的病例看，武汉的华南海鲜市场一度被认为是疫情发源地。
@@ -232,6 +264,4 @@ if __name__ == '__main__':
 全球疫情仍在蔓延，诸多疑问还有待各国科研人员携手解答。正如世卫组织总干事谭德塞日前多次强调，在全球共同抗击新冠肺炎疫情时，“需要事实，而非恐惧”“需要科学，而非谣言”“需要团结，而非污名化”。
 （原标题为：科普：新冠病毒起源于哪里？专家表示目前尚难下结论）
     '''
-
-    print(test_news)
-    print(s.get_speak_content(test_news))
+print(s.get_sentiment(test_news))
