@@ -201,7 +201,7 @@ class SpeakDetect:
 
             # 添加到结果列表
             result.append(result_item)
-
+        print(result)
         return result
 
 if __name__ == '__main__':
