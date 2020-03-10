@@ -1,4 +1,4 @@
-data/
+data/ltp_data_v3.4.0
 save/*
 .idea
 *.pyc
