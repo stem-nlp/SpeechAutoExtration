@@ -13,7 +13,7 @@ num_labels = 2
 class Bert:
     def __init__(self):
         # Bert模型以及相关配置
-        # self.device = torch.device('cpu')
+
         # config = BertConfig.from_pretrained('bert-base-chinese',
         #                                     num_labels=num_labels,
         #                                     hidden_dropout_prob=hidden_dropout_prob)
@@ -21,6 +21,7 @@ class Bert:
         # self.tokenizer = BertTokenizer.from_pretrained('bert-base-chinese')
         # self.model = BertForSequenceClassification.from_pretrained('bert-base-chinese', config=config)
 
+        # self.device = torch.device('cpu')
         self.device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
         self.tokenizer = BertTokenizer.from_pretrained('bert-base-chinese')
         self.model = BertForSequenceClassification.from_pretrained(BERT_MODEL_PATH)
