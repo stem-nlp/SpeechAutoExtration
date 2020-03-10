@@ -3,9 +3,11 @@ from flask_cors import cross_origin
 import json
 
 from model import Speak
+from model import  find_similarword
 app = Flask(__name__)
 
-model = Speak.SpeakDetect()
+# model = Speak.SpeakDetect()
+model = find_similarword.SpeakDetect()
 
 @app.route("/", methods=["GET"])
 def main():
@@ -29,6 +31,6 @@ def api_model():
         return jsonify({"code":-1, "data":str(e)})
 
 if __name__ == '__main__':
-    app.run()
+    app.run(port=7007, host="0.0.0.0")
 
 application = app
