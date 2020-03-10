@@ -139,8 +139,8 @@ function draw_echart(data) {
     data.forEach(item => {
         item.sentiment === 0 ? negative++ : positive++
     });
-    brower.push({name: "正面", value: positive});
     brower.push({name: "负面", value: negative});
+    brower.push({name: "正面", value: positive});
 
     // 更改饼状图参数
     myChart.setOption({
