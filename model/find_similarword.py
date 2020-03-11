@@ -31,12 +31,11 @@ sayverb_file.close()
 
 speak_words= ['表示', '说','回复', '指出', '认为', '坦言', '告诉', '强调', '称', '直言', '普遍认为', '介绍', '透露', '重申', '呼吁', '说道', '感叹', '地说', '写道',
          '中称', '证实', '还称', '猜测', '暗示', '感慨', '热议', '敦促', '指责', '声称', '主张', '反对', '批评', '表态', '中说', '承认', '却说', '感触',
-         '提到', '所说', '引述', '质疑', '抨击','回应', '分析说','发现','表示','表态']
+         '提到', '所说', '引述', '质疑', '抨击','回应', '分析说','发现','表示','表态','推测','推断','判决','判定','要求']
 
 class SpeakDetect:
     def __init__(self):
         self.bert = Bert() # 用于情感分析
-        
 
     def get_word_list(self, sentence, model):
         # 得到分词
@@ -54,6 +53,11 @@ class SpeakDetect:
         postag_list = list(postag.postag(word_list))
         postag.release()
         self.postag_list=postag_list
+        wordtag_dict=defaultdict(str)
+        for i in range(len(word_list)):
+            if word_list[i] not in wordtag_dict.keys():
+                wordtag_dict[word_list[i]]=postag_list[i]
+        self.wordtag_dict=wordtag_dict
 
     def get_parser_list(self, word_list, postag_list, model):
         # 得到依存关系
@@ -107,9 +111,8 @@ class SpeakDetect:
         self.postag_list=[self.postag_list[j] for j in range(len(self.postag_list)) if j not in remove_element]
         self.parser_list=[self.parser_list[j] for j in range(len(self.parser_list)) if j not in remove_element]
         self.ner_list=[self.ner_list[j] for j in range(len(self.ner_list)) if j not in remove_element]
-        word_rel_list=[item[:3] for item in word_rel_list if item[3][:3] not in ['B-N','I-N']]
+        self.word_rel_list=[item[:3] for item in word_rel_list if item[3][:3] not in ['B-N','I-N']]
         #word_rel_list的元素为[词的位置,词的字符串，词的依存关系元祖（上级词的位置，依存关系）]
-        return word_rel_list
 
     #获得依存关系路径
     def get_path(self,word_rel_list,path_list):
@@ -126,31 +129,39 @@ class SpeakDetect:
     #获得主语的修饰词，规则：与核心词间关系为SBV的词作为主语词基(已经过NER合并专有名词)，寻找所有与该词基有ATT依存关系的词，按词序排列,但最多只取3个修饰词
     def get_ATT(self,word_rel_list,path_list):
         center=path_list[-1][0]
+        center_id=0
         path_end=0
-        for item in word_rel_list:
-            if (item[2][0]==path_list[-1][0]) & (item[2][1]=='ATT'):
-                path_list.append((item[0],item[1]))
+        for i in range(len(word_rel_list)):
+            if word_rel_list[i][0]==center:
+                center_id=i
+                break
+        for i in range(center_id,-1,-1):
+            if (word_rel_list[i][2][0]==path_list[-1][0]) & (word_rel_list[i][2][1] in ['ATT']):
+                path_list.append((word_rel_list[i][0],word_rel_list[i][1],word_rel_list[i][2][1]))
                 path_end=1
                 break
         if path_end==1:
             self.get_ATT(word_rel_list,path_list)
         sorted_list=sorted(path_list,key=lambda x:x[0])
-        nearest_id=0
-        for item in word_rel_list:
-            if item[0]<center:
-                nearest_id=item[0]
-            else:
-                break
-        if nearest_id>sorted_list[-1][0]:
-            ATT_subject=''
-        else:
-            dict_wordpos=defaultdict(str)
-            for i in range(len(self.word_list)):
-                dict_wordpos[self.word_list[i]]=self.postag_list[i]
-            ATT_list=[sub[1] for sub in sorted_list if dict_wordpos[sub[1]] !='v']
-            
-            ATT_subject= ''.join(ATT_list)
-        return ATT_subject
+        for i in range(len(sorted_list)):
+            if (sorted_list[i][2]=='RAD') & (sorted_list[i][1]=='的'):
+                sorted_list=sorted_list[i+1:]
+        if len(sorted_list)>1:
+            for i in range(len(word_rel_list)):
+                if word_rel_list[i][0]==sorted_list[-2][0]:
+                    att_id=i
+                elif word_rel_list[i][0]==sorted_list[-1][0]:
+                    sbv_id=i
+            if att_id != sbv_id-1:
+                sorted_list=sorted_list[-1:]
+        ATT_list=[sub[1] for sub in sorted_list]
+        num_position=sorted_list[-1][0]
+        #dict_wordpos=defaultdict(str)
+        #for i in range(len(self.word_list)):
+            #dict_wordpos[self.word_list[i]]=self.postag_list[i]
+        #ATT_list=[sub[1] for sub in sorted_list if dict_wordpos[sub[1]] !='v']
+        ATT_subject= ''.join(ATT_list)
+        return [num_position,ATT_subject]
     
     #获得内容：所有依存路径中包含该动词的词按顺序排列
     def get_content(self,word_rel_list,content_code,content_center):
@@ -167,15 +178,24 @@ class SpeakDetect:
             if content_list[i] in ['。','！','？']:
                 content_list=content_list[:i]
                 break
-        content=''.join(content_list)
+        #长度低于5个字的言论作为噪音不提取
+        if len(content_list)<=5:
+            content=''
+        else:
+            if self.wordtag_dict[content_list[-1]]=='wp':
+                content_list=content_list[:-1]
+            elif self.wordtag_dict[content_list[-2]]=='wp':
+                content_list=content_list[:-2]
+            content=''.join(content_list)
         return content,(start_num,end_num)
               
-    def get_speak(self, word_rel_list):
+    def get_speak(self):
         subject_code=[]
         speak_code=[]
         speak_content=[]
         #word_rel_list的元素为[词的位置,词的字符串，词的依存关系元祖（上级词的位置，依存关系），词的依存路径列表[(词自身位置，上级词位置，依存关系)]]
         #为防止将后一句说话内容作为前一句内容的一部分提取，将所有pos_model定义为动词且在speak_words中的词都作为原始核心词，不与之前的动词产生依存关系，依存于后句核心词的其他词也不依存于前句
+        word_rel_list=self.word_rel_list
         word_rel_list=[[word_rel_list[i][0],word_rel_list[i][1],(0,'HED')] if ((word_rel_list[i][1] in speak_words) & (self.postag_list[i]=='v')) else word_rel_list[i] for i in range(len(word_rel_list))]
         for item in word_rel_list:
             item.append(self.get_path(word_rel_list,[(item[0],item[2][0],item[2][1])]))
@@ -187,9 +207,9 @@ class SpeakDetect:
                 for subitem in word_rel_list:
                     if (subitem[2][0]==item[0]) & (subitem[2][1]=='SBV'):
                         if len(subject_code)<speak_num:
-                            subject_code.append([self.get_ATT(word_rel_list,[(subitem[0],subitem[1])])])
+                            subject_code.append([self.get_ATT(word_rel_list,[(subitem[0],subitem[1],subitem[2][1])])])
                         else:
-                            subject_code[speak_num-1].append(self.get_ATT(word_rel_list,[(subitem[0],subitem[1])]))
+                            subject_code[speak_num-1].append(self.get_ATT(word_rel_list,[(subitem[0],subitem[1],subitem[2][1])]))
                     if (subitem[2][0]==item[0]) & (subitem[2][1] in ['VOB','FOB']):
                         content, position=self.get_content(word_rel_list,subitem[0],(subitem[0],subitem[1]))
                         if len(speak_content)<speak_num:
@@ -202,19 +222,25 @@ class SpeakDetect:
                     subject_code.append([])
                 if len(speak_content)<speak_num:
                     speak_content.append([])
+        #self.word_rel_list=word_rel_list
         #多个名词依存于同一个核心动词时，取最近的名词
-        subject_code=[x[-1] if len(x)>0 else '' for x in subject_code]
-        wordtag_dict=defaultdict(str)
-        for i in range(len(self.word_list)):
-            if self.word_list[i] not in wordtag_dict.keys():
-                wordtag_dict[self.word_list[i]]=self.postag_list[i]
+        subject_code=[x[-1] if len(x)>0 else ['',''] for x in subject_code]
+        #self.subject_code=subject_code
+        #self.speak_code=speak_code
+        #self.speak_content=speak_content
+        subject_sumlist=[]
+        for i in range(len(word_rel_list)):
+            if (word_rel_list[i][2][1]=='SBV') & (self.wordtag_dict[word_rel_list[i][1]]!='r'):
+                subject_sumlist.append(self.get_ATT(word_rel_list,[(word_rel_list[i][0],word_rel_list[i][1],word_rel_list[i][2][1])]))        
+        subject_sumlist=sorted(subject_sumlist,key=lambda x:x[0])
         #若名词为代词，替换为前面最临近的名词,为空则保留为空
-        for i in range(1,len(subject_code)):
-            if (wordtag_dict[subject_code[i]] =='r'):
-                for j in range(i-1,-1,-1):
-                    if (subject_code[j]!='') & (wordtag_dict[subject_code[j]] !='r'):
-                        subject_code[i]=subject_code[j]
+        for i in range(len(subject_code)):
+            if self.wordtag_dict[subject_code[i][1]] =='r':
+                for j in range(len(subject_sumlist)):
+                    if subject_sumlist[j][0]>=subject_code[i][0]:
+                        subject_code[i][1]=subject_sumlist[j-1][1]
                         break
+        subject_code=[item[1] for item in subject_code]
         speak_content=[x[0] if len(x)>0 else '' for x in speak_content]
         sum_list=list(zip(subject_code,speak_code,speak_content))
         remove_sumlist=[]
@@ -225,7 +251,8 @@ class SpeakDetect:
         self.df_result=pd.DataFrame(sum_list,columns=['person','verb','content'])
 
     def get_sentiment(self,news):
-        s.get_speak(s.get_news_parser(news))
+        s.get_news_parser(news)
+        s.get_speak()
         result=[]
         self.df_result['sentiment']='-'
         # 情感分析
@@ -264,4 +291,4 @@ test_news=test_news = '''
 全球疫情仍在蔓延，诸多疑问还有待各国科研人员携手解答。正如世卫组织总干事谭德塞日前多次强调，在全球共同抗击新冠肺炎疫情时，“需要事实，而非恐惧”“需要科学，而非谣言”“需要团结，而非污名化”。
 （原标题为：科普：新冠病毒起源于哪里？专家表示目前尚难下结论）
     '''
-print(s.get_sentiment(test_news))
+s.get_sentiment(test_news)
