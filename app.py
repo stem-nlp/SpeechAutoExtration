@@ -22,7 +22,7 @@ def api_model():
         result = {
             "code": 0,
             "data":{
-                "detail": model.get_speak_content(input_body)
+                "detail": model.get_sentiment(input_body)
             }
         }
         return jsonify(result)
